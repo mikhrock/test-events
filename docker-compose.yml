@@ -1,0 +1,76 @@
+version: '3'
+
+networks:
+  internal:
+    driver: bridge
+    ipam:
+      driver: default
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: te_nginx
+    ports:
+      - ${NGINX_PORT}:80
+      - ${NGINX_SSL_PORT}:443
+    links:
+      - php
+    volumes:
+      - ./logs/nginx:/var/log/nginx:cached
+      - ./app:/var/www/app:cached
+      - .docker/nginx/test-events.conf:/etc/nginx/conf.d/site.conf
+    networks:
+      - internal
+
+  mysql:
+    image: mysql:8
+    container_name: te_mysql
+    volumes:
+      - .docker/data/db:/var/lib/mysql
+    command:
+      - "--default-authentication-plugin=mysql_native_password"
+      - "--lower_case_table_names=1"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    networks:
+      - internal
+
+  php:
+    build: .docker/php
+    container_name: te_php
+    ports:
+      - ${PHP_PORT}:9000
+    volumes:
+      - ./app:/var/www/app:cached
+      - ./logs/symfony:/var/www/app/var/log:cached
+    environment:
+      - maildev_host=tc_maildev
+    depends_on:
+      - maildev
+      - mysql
+    networks:
+      - internal
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: te_phpmyadmin
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: ${MYSQL_PORT}
+    ports:
+      - ${PHPMYADMIN_PORT}:80
+    links:
+      - mysql
+    networks:
+      - internal
+
+  maildev:
+    image: djfarrelly/maildev
+    container_name: te_maildev
+    ports:
+      - ${MAILDEV_PORT}:80
+    networks:
+      - internal
